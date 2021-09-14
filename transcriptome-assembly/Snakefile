@@ -5,6 +5,7 @@ configfile: "config.yaml"
 import pandas as pd
 samples = pd.read_csv("samples_teste.csv")
 parts = pd.read_csv("parts_teste.csv")
+GENOTYPE="teste"
 
 #Software executable
 fastq_dump = config["software"]["fastq-dump"]
@@ -13,19 +14,21 @@ bbduk = config["software"]["bbduk"]
 kraken2 = config["software"]["kraken2"]
 create_index = config["software"]["create_index"]
 contfree_ngs = config["software"]["contfree_ngs"]
+trinity = config["software"]["trinity"]
 
 rule all:
 	input:
-		#Generate index files
-		expand("teste/6_contamination_removal/index/{sample}.trimmed.R1.index", sample=samples),
-		expand("teste/6_contamination_removal/index/{sample}.trimmed.R2.index", sample=samples)
+		expand("7_trinity_assembly/MyAssembly_{genotype}_trinity_k25.Trinity.fasta", genotype=GENOTYPE)			
 
 rule download_fastq:
 	output:
 		R1 = "teste/1_raw_reads_in_fastq_format/{sample}_1.fastq",
 		R2 = "teste/1_raw_reads_in_fastq_format/{sample}_2.fastq"
 	threads: 1
-	resources: mem_free=1
+	resources:
+		mem_free=1
+	params:
+		server="figsrv"
 	log:
 		"teste/logs/download_fastq/{sample}.log"
 	shell:
@@ -41,7 +44,10 @@ rule fastqc:
                 html_2= "teste/2_raw_reads_fastqc_reports/{sample}_2_fastqc.html",
                 zip_2 = "teste/2_raw_reads_fastqc_reports/{sample}_2_fastqc.zip"
 	threads: 1
-	resources: mem_free=1
+	resources: 
+		mem_free=1
+	params:
+		server="figsrv"
 	log:
 		"teste/logs/fastqc/{sample}.log"
 	shell:
@@ -60,7 +66,10 @@ rule bbduk:
 	log:
 		"teste/logs/bbduk/{sample}.log"
 	threads: 4
-	resources: mem_free=1
+	resources:
+		mem_free=1
+	params:
+		server="figsrv"
 	shell:
 		"{bbduk} -Xmx40g threads={threads} in1={input.R1} in2={input.R2} "
 		"refstats={output.refstats} stats={output.stats} "
@@ -86,7 +95,10 @@ rule fastqc_after_bbduk:
 		html_2= "teste/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R2_fastqc.html",
 		zip_2 = "teste/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R2_fastqc.zip"
 	threads: 1
-	resources: mem_free=1
+	resources:
+		mem_free=1
+	params:
+		server="figsrv"
 	log:
 		"teste/logs/fastqc_after_bbduk/{sample}.log"
 	shell:
@@ -102,6 +114,8 @@ rule kraken:
 	threads: 10
 	resources:
 		mem_free=250
+	params:
+		server="figsrv"
 	log:
 		"teste/logs/kraken2/{sample}.log"
 	shell:
@@ -112,20 +126,14 @@ rule split_kraken_output:
 	input:
 		"teste/5_trimmed_reads_kraken_reports/{sample}.trimmed.kraken"
 	output:
-		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_00.kraken",
-		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_01.kraken",
-		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_02.kraken",
-		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_03.kraken",
-		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_04.kraken",
-		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_05.kraken",
-		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_06.kraken",
-		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_07.kraken",
-		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_08.kraken",
-		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_09.kraken"
+		expand("teste/5_trimmed_reads_kraken_reports/parts/{{sample}}.trimmed_{part}.kraken", part=parts)
 	params:
 		identificator = "{sample}"
 	threads: 1
-	resources: mem_free=1
+	resources: 
+		mem_free=1
+	params:
+		server="figsrv"
 	log:
 		"teste/logs/split_kraken_output/{sample}.log"
 	shell:
@@ -141,6 +149,8 @@ rule create_index_contfree_ngs:
 	threads: 1
 	resources:
 		mem_free=1
+	params:
+		server="bcmsrv"
 	log:
 		"teste/logs/create_index/{sample}.log"
 	shell:
@@ -157,9 +167,62 @@ rule contfree_ngs:
 		unclassified_parts_R1 = "teste/6_contamination_removal/parts/{part}.{sample}.trimmed.unclassified.R1.fastq",
 		unclassified_parts_R2 = "teste/6_contamination_removal/parts/{part}.{sample}.trimmed.unclassified.R2.fastq"
 	threads: 1
-	resources: mem_free=1
-#	log:
-#		"teste/logs/contfree_ngs/{sample}.{part}.log"
+	resources: 
+		mem_free=1
+	params:
+		server="bcmsrv"
+	log:
+		"teste/logs/contfree_ngs/{sample}.{part}.log"
 	shell:
 		"{contfree_ngs} --taxonomy {input.kraken_file} --s p --R1 {input.R1} --R2 {input.R2} --taxon Viridiplantae -o teste/6_contamination_removal/parts/ 2> {log};"
 
+rule merge:
+	input:
+		filtered_parts_R1 = expand("teste/6_contamination_removal/parts/{part}.{{sample}}.trimmed.filtered.R1.fastq", part=parts),
+		filtered_parts_R2 = expand("teste/6_contamination_removal/parts/{part}.{{sample}}.trimmed.filtered.R2.fastq", part=parts),
+		unclassified_parts_R1 = expand("teste/6_contamination_removal/parts/{part}.{{sample}}.trimmed.unclassified.R1.fastq", part=parts),
+		unclassified_parts_R2 = expand("teste/6_contamination_removal/parts/{part}.{{sample}}.trimmed.unclassified.R2.fastq", part=parts)
+	output:
+		filtered_total_R1 = "teste/6_contamination_removal/{sample}.trimmed.filtered.total.R1.fastq",
+		filtered_total_R2 = "teste/6_contamination_removal/{sample}.trimmed.filtered.total.R2.fastq",
+		unclassified_total_R1 = "teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R1.fastq",
+		unclassified_total_R2 = "teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R2.fastq"
+	threads: 1
+	resources:
+		mem_free=1
+	params:
+		server="figsrv"
+	log:
+		"teste/logs/merge/{sample}.log"
+	shell:
+		"cat {input.filtered_parts_R1} >> {output.filtered_total_R1};"
+		"cat {input.filtered_parts_R2} >> {output.filtered_total_R2};"
+		"cat {input.unclassified_parts_R1} >> {output.unclassified_total_R1};"
+		"cat {input.unclassified_parts_R2} >> {output.unclassified_total_R2}"
+
+filtered_total_R1 = expand("teste/6_contamination_removal/{sample}.trimmed.filtered.total.R1.fastq", sample=samples)
+filtered_total_R2 = expand("teste/6_contamination_removal/{sample}.trimmed.filtered.total.R2.fastq", sample=samples)
+unclassified_total_R1 = expand("teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R1.fastq", sample=samples)
+unclassified_total_R2 = expand("teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R2.fastq", sample=samples)
+
+rule Trinity:
+	input:
+		filtered_total_R1 = expand("teste/6_contamination_removal/{sample}.trimmed.filtered.total.R1.fastq", sample=samples),
+		filtered_total_R2 = expand("teste/6_contamination_removal/{sample}.trimmed.filtered.total.R2.fastq", sample=samples),
+		unclassified_total_R1 = expand("teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R1.fastq", sample=samples),
+		unclassified_total_R2 = expand("teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R2.fastq", sample=samples) 
+	output: 
+		"7_trinity_assembly/MyAssembly_{genotype}_trinity_k25.Trinity.fasta"
+	params:
+		filtered_total_R1=','.join(filtered_total_R1),
+		filtered_total_R2=','.join(filtered_total_R2),
+		unclassified_total_R1=','.join(unclassified_total_R1),
+		unclassified_total_R2=','.join(unclassified_total_R2),
+		server="figsrv",
+		genotype=GENOTYPE
+	log:
+		k25 = "teste/logs/trinity/{genotype}.k25.log",
+		k31 = "teste/logs/trinity/{genotype}.k31.log"
+	shell:
+		"/usr/bin/time -v {trinity} --seqType fq --left {params.filtered_total_R1},{params.unclassified_total_R1} --right {params.filtered_total_R2},{params.unclassified_total_R2} --SS_lib_type RF --max_memory 100G --min_contig_length 200 --CPU {threads} --output 7_trinity_assembly/MyAssembly_{params.genotype}_trinity_k25 --full_cleanup --no_normalize_reads --KMER_SIZE 25 2> {log.k25};"
+		"/usr/bin/time -v {trinity} --seqType fq --left {params.filtered_total_R1},{params.unclassified_total_R1} --right {params.filtered_total_R2},{params.unclassified_total_R2} --SS_lib_type RF --max_memory 100G --min_contig_length 200 --CPU {threads} --output 7_trinity_assembly/MyAssembly_{params.genotype}_trinity_k25 --full_cleanup --no_normalize_reads --KMER_SIZE 25 2> {log.k31}"
