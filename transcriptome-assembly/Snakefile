@@ -261,6 +261,7 @@ rule Trinity:
 		genotype=GENOTYPE
 	resources: 
 		mem_free=20
+        threads: 10
 	log:
 		k25 = "teste/logs/trinity/{genotype}.k25.log",
 		k31 = "teste/logs/trinity/{genotype}.k31.log"
