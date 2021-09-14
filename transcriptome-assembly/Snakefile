@@ -3,9 +3,17 @@
 configfile: "config.yaml"
 
 import pandas as pd
+import yaml
+
 samples = pd.read_csv("samples_teste.csv")
 parts = pd.read_csv("parts_teste.csv")
 GENOTYPE="teste"
+
+#with open('cluster_server.conf', 'r') as f:
+#	servers = yaml.safe_load(f)
+
+#def get_server(rule_name):
+#	return servers[rule_name] if rule_name in servers else servers['__default__']
 
 #Software executable
 fastq_dump = config["software"]["fastq-dump"]
@@ -18,8 +26,32 @@ trinity = config["software"]["trinity"]
 
 rule all:
 	input:
+		#expand("teste/1_raw_reads_in_fastq_format/{sample}_1.fastq", sample = config["samples"]),
+                #expand("teste/1_raw_reads_in_fastq_format/{sample}_2.fastq", sample = config["samples"])
+		#expand("teste/2_raw_reads_fastqc_reports/{sample}_1_fastqc.html", sample = config["samples"]),
+		#expand("teste/2_raw_reads_fastqc_reports/{sample}_2_fastqc.html", sample = config["samples"])
+		#Working to request fastq files after bbduk 
+		#expand("teste/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R1_fastqc.html", sample = samples),
+		#expand("teste/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R2_fastqc.html", sample = samples)
+		#Working running kraken
+		#expand("teste/5_trimmed_reads_kraken_reports/{sample}.trimmed.kraken", sample=samples)
+		#Working!!i
+		#Try to generate index files: Working on bcmsrv!!!
+		#expand("teste/6_contamination_removal/index/{sample}.trimmed.R1.index", sample=samples),
+		#expand("teste/6_contamination_removal/index/{sample}.trimmed.R1.index", sample=samples)
+		#expand("teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_{part}.kraken", sample=samples, part=parts)
+		#expand("teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_{part}.kraken", sample=samples, part=parts)
+		#Remove contaminants:
+		#expand("teste/6_contamination_removal/parts/{part}.{sample}.trimmed.filtered.R1.fastq", sample=samples, part=parts),
+		#expand("teste/6_contamination_removal/parts/{part}.{sample}.trimmed.filtered.R2.fastq", sample=samples, part=parts)
+		#generate total filtered and unclassified files
+		#expand("teste/6_contamination_removal/parts/{part}.{sample}.trimmed.filtered.R1.fastq", part=parts, sample=samples),
+		#expand("teste/6_contamination_removal/parts/{part}.{sample}.trimmed.filtered.R1.fastq", part=parts, sample=samples),
+		#TEstar esses dois depois do trinty
+		##expand("teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R1.fastq", sample=samples),
+		##expand("teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R2.fastq", sample=samples)
 		expand("7_trinity_assembly/MyAssembly_{genotype}_trinity_k25.Trinity.fasta", genotype=GENOTYPE)			
-
+#Download FASTQ files: Working!
 rule download_fastq:
 	output:
 		R1 = "teste/1_raw_reads_in_fastq_format/{sample}_1.fastq",
@@ -34,6 +66,7 @@ rule download_fastq:
 	shell:
 		"{fastq_dump} --defline-seq '@$sn[_$rn]/$ri' --split-files {wildcards.sample} -O teste/1_raw_reads_in_fastq_format 2> {log}"
 
+#Run fastqc: Working!
 rule fastqc:
 	input:
                 R1 = "teste/1_raw_reads_in_fastq_format/{sample}_1.fastq",
@@ -54,6 +87,7 @@ rule fastqc:
 		"{fastqc} -f fastq {input.R1} -o teste/2_raw_reads_fastqc_reports 2> {log};"
 		"{fastqc} -f fastq {input.R2} -o teste/2_raw_reads_fastqc_reports 2> {log}"
 
+#Run bbduk: Working!
 rule bbduk:
 	input:
 		R1 = "teste/1_raw_reads_in_fastq_format/{sample}_1.fastq",
@@ -85,6 +119,7 @@ rule bbduk:
 		"/Storage/progs/sortmerna-2.1b/rRNA_databases/silva-euk-28s-id98.fasta "
 		"minlength=75 qtrim=w trimq=20 tpe tbo 2> {log}"
 
+#Run fastqc after: Working!
 rule fastqc_after_bbduk:
 	input:
 		R1 = "teste/3_trimmed_reads/{sample}.trimmed.R1.fastq",
@@ -105,6 +140,7 @@ rule fastqc_after_bbduk:
 		"{fastqc} -f fastq {input.R1} -o teste/4_trimmed_reads_fastqc_reports 2> {log};"
 		"{fastqc} -f fastq {input.R2} -o teste/4_trimmed_reads_fastqc_reports 2> {log}"
 
+#Run kraken: Waiting to test
 rule kraken:
 	input:
 		R1 = "teste/3_trimmed_reads/{sample}.trimmed.R1.fastq",
@@ -122,23 +158,24 @@ rule kraken:
 		"{kraken2} --db /Storage/data1/felipe.peres/kraken2/completeDB "
 		"--threads {threads} --report-zero-counts --confidence 0.05 --output {output} --paired {input.R1} {input.R2} 2> {log}"
 
+#Split kraken: Working!
 rule split_kraken_output:
 	input:
 		"teste/5_trimmed_reads_kraken_reports/{sample}.trimmed.kraken"
 	output:
 		expand("teste/5_trimmed_reads_kraken_reports/parts/{{sample}}.trimmed_{part}.kraken", part=parts)
 	params:
-		identificator = "{sample}"
+		identificator = "{sample}",
+		server = "figsrv"
 	threads: 1
 	resources: 
 		mem_free=1
-	params:
-		server="figsrv"
 	log:
 		"teste/logs/split_kraken_output/{sample}.log"
 	shell:
-		"split -n 10 -d --additional-suffix=.kraken {input} teste/5_trimmed_reads_kraken_reports/parts/{params.identificator}.trimmed_ 2> {log}"
+		"split --number=l/10 -d --additional-suffix=.kraken {input} teste/5_trimmed_reads_kraken_reports/parts/{params.identificator}.trimmed_ 2> {log}"
 
+#Remove contaminants with ContFree-NGS: Waiting to test
 rule create_index_contfree_ngs:
 	input: 
 		R1 = "teste/3_trimmed_reads/{sample}.trimmed.R1.fastq",
@@ -156,6 +193,7 @@ rule create_index_contfree_ngs:
 	shell:
 		"{create_index} -R1 {input.R1} -R2 {input.R2} -o teste/6_contamination_removal/index/ 2> {log}"
 
+#Run contfree_ngs: Waiting to text
 rule contfree_ngs:
 	input:
 		R1 = "teste/6_contamination_removal/index/{sample}.trimmed.R1.index",
@@ -200,6 +238,7 @@ rule merge:
 		"cat {input.unclassified_parts_R1} >> {output.unclassified_total_R1};"
 		"cat {input.unclassified_parts_R2} >> {output.unclassified_total_R2}"
 
+#Run Trinity: Waiting to test
 filtered_total_R1 = expand("teste/6_contamination_removal/{sample}.trimmed.filtered.total.R1.fastq", sample=samples)
 filtered_total_R2 = expand("teste/6_contamination_removal/{sample}.trimmed.filtered.total.R2.fastq", sample=samples)
 unclassified_total_R1 = expand("teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R1.fastq", sample=samples)
@@ -220,6 +259,8 @@ rule Trinity:
 		unclassified_total_R2=','.join(unclassified_total_R2),
 		server="figsrv",
 		genotype=GENOTYPE
+	resources: 
+		mem_free=20
 	log:
 		k25 = "teste/logs/trinity/{genotype}.k25.log",
 		k31 = "teste/logs/trinity/{genotype}.k31.log"

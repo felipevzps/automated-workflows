@@ -45,6 +45,16 @@ else:
 	print("Exiting. \n")
 	exit()
 
+#index_path = "teste/6_contamination_removal/index/"
+#index_R1_file = os.path.join(index_path, R1_file[:-5] + "index")
+#index_R2_file = os.path.join(index_path, R2_file[:-5] + "index")
+
+index_R1 = SeqIO.index_db(R1_file[:-5] + "index")
+index_R2 = SeqIO.index_db(R2_file[:-5] + "index")
+
+#teste/6_contamination_removal/index/ teste/6_contamination_removal/index/SRR4014641.trimmed.R1.index
+
+'''
 #Checking for indexed file and create it if dont exists	
 def create_indexed_db_for_paired_fastq_files():
 	indexdb_R1_file = R1_file[:-5] + "index"
@@ -85,6 +95,7 @@ else:
 		print("ERROR: An exception occurred while trying to open your indexed single-end databse")
 		print("Exiting. \n")
 		exit()
+'''
 
 #Getting NCBI taxonomy database and user taxon
 ncbi = NCBITaxa()
@@ -124,7 +135,6 @@ count_contaminant_sequences = 0
 if paired == 1:
 	with open(taxonomy_file, "r") as taxonomy_classification_file, open(filtered_R1_output, "w") as classified_R1, open(filtered_R2_output, "w") as classified_R2, open(unfiltered_R1_output, "w") as unclassified_R1, open(unfiltered_R2_output, "w") as unclassified_R2:
 		for line in taxonomy_classification_file:
-
 			#Getting IDs
 			R1_sequence_id = line.split()[1] + "/1"
 			R2_sequence_id = line.split()[1] + "/2"
