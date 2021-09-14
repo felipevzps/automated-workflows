@@ -5,15 +5,9 @@ configfile: "config.yaml"
 import pandas as pd
 import yaml
 
-samples = pd.read_csv("samples_teste.csv")
-parts = pd.read_csv("parts_teste.csv")
-GENOTYPE="teste"
-
-#with open('cluster_server.conf', 'r') as f:
-#	servers = yaml.safe_load(f)
-
-#def get_server(rule_name):
-#	return servers[rule_name] if rule_name in servers else servers['__default__']
+samples = pd.read_csv("samples_QS99-2014.csv")
+parts = pd.read_csv("parts.csv")
+GENOTYPE="QS99-2014"
 
 #Software executable
 fastq_dump = config["software"]["fastq-dump"]
@@ -26,79 +20,56 @@ trinity = config["software"]["trinity"]
 
 rule all:
 	input:
-		#expand("teste/1_raw_reads_in_fastq_format/{sample}_1.fastq", sample = config["samples"]),
-                #expand("teste/1_raw_reads_in_fastq_format/{sample}_2.fastq", sample = config["samples"])
-		#expand("teste/2_raw_reads_fastqc_reports/{sample}_1_fastqc.html", sample = config["samples"]),
-		#expand("teste/2_raw_reads_fastqc_reports/{sample}_2_fastqc.html", sample = config["samples"])
-		#Working to request fastq files after bbduk 
-		#expand("teste/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R1_fastqc.html", sample = samples),
-		#expand("teste/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R2_fastqc.html", sample = samples)
-		#Working running kraken
-		#expand("teste/5_trimmed_reads_kraken_reports/{sample}.trimmed.kraken", sample=samples)
-		#Working!!i
-		#Try to generate index files: Working on bcmsrv!!!
-		#expand("teste/6_contamination_removal/index/{sample}.trimmed.R1.index", sample=samples),
-		#expand("teste/6_contamination_removal/index/{sample}.trimmed.R1.index", sample=samples)
-		#expand("teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_{part}.kraken", sample=samples, part=parts)
-		#expand("teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_{part}.kraken", sample=samples, part=parts)
-		#Remove contaminants:
-		#expand("teste/6_contamination_removal/parts/{part}.{sample}.trimmed.filtered.R1.fastq", sample=samples, part=parts),
-		#expand("teste/6_contamination_removal/parts/{part}.{sample}.trimmed.filtered.R2.fastq", sample=samples, part=parts)
-		#generate total filtered and unclassified files
-		#expand("teste/6_contamination_removal/parts/{part}.{sample}.trimmed.filtered.R1.fastq", part=parts, sample=samples),
-		#expand("teste/6_contamination_removal/parts/{part}.{sample}.trimmed.filtered.R1.fastq", part=parts, sample=samples),
-		#TEstar esses dois depois do trinty
-		##expand("teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R1.fastq", sample=samples),
-		##expand("teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R2.fastq", sample=samples)
-		expand("7_trinity_assembly/MyAssembly_{genotype}_trinity_k25.Trinity.fasta", genotype=GENOTYPE)			
-#Download FASTQ files: Working!
+		expand("MyAssembly_{genotype}/7_trinity_assembly/MyAssembly_{genotype}_trinity_k25.Trinity.fasta", genotype=GENOTYPE)	
+
 rule download_fastq:
 	output:
-		R1 = "teste/1_raw_reads_in_fastq_format/{sample}_1.fastq",
-		R2 = "teste/1_raw_reads_in_fastq_format/{sample}_2.fastq"
+		R1 = "MyAssembly_{genotype}/1_raw_reads_in_fastq_format/{sample}_1.fastq",
+		R2 = "MyAssembly_{genotype}/1_raw_reads_in_fastq_format/{sample}_2.fastq"
 	threads: 1
 	resources:
 		mem_free=1
 	params:
+		genotype="{genotype}",
 		server="figsrv"
 	log:
-		"teste/logs/download_fastq/{sample}.log"
+		"MyAssembly_{genotype}/logs/download_fastq/{sample}.log"
 	shell:
-		"{fastq_dump} --defline-seq '@$sn[_$rn]/$ri' --split-files {wildcards.sample} -O teste/1_raw_reads_in_fastq_format 2> {log}"
+		"{fastq_dump} --defline-seq '@$sn[_$rn]/$ri' --split-files {wildcards.sample} -O MyAssembly_{params.genotype}/1_raw_reads_in_fastq_format 2> {log}"
 
-#Run fastqc: Working!
 rule fastqc:
 	input:
-                R1 = "teste/1_raw_reads_in_fastq_format/{sample}_1.fastq",
-                R2 = "teste/1_raw_reads_in_fastq_format/{sample}_2.fastq" 
+                R1 = "MyAssembly_{genotype}/1_raw_reads_in_fastq_format/{sample}_1.fastq",
+                R2 = "MyAssembly_{genotype}/1_raw_reads_in_fastq_format/{sample}_2.fastq" 
 	output:
-		html_1= "teste/2_raw_reads_fastqc_reports/{sample}_1_fastqc.html",
-		zip_1 = "teste/2_raw_reads_fastqc_reports/{sample}_1_fastqc.zip",
-                html_2= "teste/2_raw_reads_fastqc_reports/{sample}_2_fastqc.html",
-                zip_2 = "teste/2_raw_reads_fastqc_reports/{sample}_2_fastqc.zip"
+		html_1= "MyAssembly_{genotype}/2_raw_reads_fastqc_reports/{sample}_1_fastqc.html",
+		zip_1 = "MyAssembly_{genotype}/2_raw_reads_fastqc_reports/{sample}_1_fastqc.zip",
+                html_2= "MyAssembly_{genotype}/2_raw_reads_fastqc_reports/{sample}_2_fastqc.html",
+                zip_2 = "MyAssembly_{genotype}/2_raw_reads_fastqc_reports/{sample}_2_fastqc.zip"
 	threads: 1
 	resources: 
 		mem_free=1
 	params:
+		genotype="{genotype}",
 		server="figsrv"
 	log:
-		"teste/logs/fastqc/{sample}.log"
+		"MyAssembly_{genotype}/logs/fastqc/{sample}.log"
 	shell:
-		"{fastqc} -f fastq {input.R1} -o teste/2_raw_reads_fastqc_reports 2> {log};"
-		"{fastqc} -f fastq {input.R2} -o teste/2_raw_reads_fastqc_reports 2> {log}"
+		"{fastqc} -f fastq {input.R1} -o MyAssembly_{params.genotype}/2_raw_reads_fastqc_reports 2> {log};"
+		"{fastqc} -f fastq {input.R2} -o MyAssembly_{params.genotype}/2_raw_reads_fastqc_reports 2> {log}"
 
-#Run bbduk: Working!
 rule bbduk:
 	input:
-		R1 = "teste/1_raw_reads_in_fastq_format/{sample}_1.fastq",
-		R2 = "teste/1_raw_reads_in_fastq_format/{sample}_2.fastq"
+		"MyAssembly_{genotype}/2_raw_reads_fastqc_reports/{sample}_1_fastqc.html",
+		R1 = "MyAssembly_{genotype}/1_raw_reads_in_fastq_format/{sample}_1.fastq",
+		R2 = "MyAssembly_{genotype}/1_raw_reads_in_fastq_format/{sample}_2.fastq"
 	output:
-		R1 = "teste/3_trimmed_reads/{sample}.trimmed.R1.fastq",
-		R2 = "teste/3_trimmed_reads/{sample}.trimmed.R2.fastq",
-		refstats = "teste/3_trimmed_reads/{sample}.trimmed.refstats",
-		stats = "teste/3_trimmed_reads/{sample}.trimmed.stats"
+		R1 = "MyAssembly_{genotype}/3_trimmed_reads/{sample}.trimmed.R1.fastq",
+		R2 = "MyAssembly_{genotype}/3_trimmed_reads/{sample}.trimmed.R2.fastq",
+		refstats = "MyAssembly_{genotype}/3_trimmed_reads/{sample}.trimmed.refstats",
+		stats = "MyAssembly_{genotype}/3_trimmed_reads/{sample}.trimmed.stats"
 	log:
-		"teste/logs/bbduk/{sample}.log"
+		"MyAssembly_{genotype}/logs/bbduk/{sample}.log"
 	threads: 4
 	resources:
 		mem_free=1
@@ -119,139 +90,140 @@ rule bbduk:
 		"/Storage/progs/sortmerna-2.1b/rRNA_databases/silva-euk-28s-id98.fasta "
 		"minlength=75 qtrim=w trimq=20 tpe tbo 2> {log}"
 
-#Run fastqc after: Working!
 rule fastqc_after_bbduk:
 	input:
-		R1 = "teste/3_trimmed_reads/{sample}.trimmed.R1.fastq",
-		R2 = "teste/3_trimmed_reads/{sample}.trimmed.R2.fastq"
+		R1 = "MyAssembly_{genotype}/3_trimmed_reads/{sample}.trimmed.R1.fastq",
+		R2 = "MyAssembly_{genotype}/3_trimmed_reads/{sample}.trimmed.R2.fastq"
 	output:
-		html_1= "teste/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R1_fastqc.html",
-		zip_1 = "teste/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R1_fastqc.zip",
-		html_2= "teste/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R2_fastqc.html",
-		zip_2 = "teste/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R2_fastqc.zip"
+		html_1= "MyAssembly_{genotype}/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R1_fastqc.html",
+		zip_1 = "MyAssembly_{genotype}/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R1_fastqc.zip",
+		html_2= "MyAssembly_{genotype}/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R2_fastqc.html",
+		zip_2 = "MyAssembly_{genotype}/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R2_fastqc.zip"
 	threads: 1
 	resources:
 		mem_free=1
 	params:
+		genotype="{genotype}",
 		server="figsrv"
 	log:
-		"teste/logs/fastqc_after_bbduk/{sample}.log"
+		"MyAssembly_{genotype}/logs/fastqc_after_bbduk/{sample}.log"
 	shell:
-		"{fastqc} -f fastq {input.R1} -o teste/4_trimmed_reads_fastqc_reports 2> {log};"
-		"{fastqc} -f fastq {input.R2} -o teste/4_trimmed_reads_fastqc_reports 2> {log}"
+		"{fastqc} -f fastq {input.R1} -o MyAssembly_{params.genotype}/4_trimmed_reads_fastqc_reports 2> {log};"
+		"{fastqc} -f fastq {input.R2} -o MyAssembly_{params.genotype}/4_trimmed_reads_fastqc_reports 2> {log}"
 
-#Run kraken: Waiting to test
 rule kraken:
 	input:
-		R1 = "teste/3_trimmed_reads/{sample}.trimmed.R1.fastq",
-		R2 = "teste/3_trimmed_reads/{sample}.trimmed.R2.fastq"
+		"MyAssembly_{genotype}/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R1_fastqc.html",
+		R1 = "MyAssembly_{genotype}/3_trimmed_reads/{sample}.trimmed.R1.fastq",
+		R2 = "MyAssembly_{genotype}/3_trimmed_reads/{sample}.trimmed.R2.fastq"
 	output:
-		"teste/5_trimmed_reads_kraken_reports/{sample}.trimmed.kraken"
+		"MyAssembly_{genotype}/5_trimmed_reads_kraken_reports/{sample}.trimmed.kraken"
 	threads: 10
 	resources:
-		mem_free=250
+		mem_free=180,
+		#def mem as consumable
+		#h_vmem=180
 	params:
 		server="figsrv"
 	log:
-		"teste/logs/kraken2/{sample}.log"
+		"MyAssembly_{genotype}/logs/kraken2/{sample}.log"
 	shell:
 		"{kraken2} --db /Storage/data1/felipe.peres/kraken2/completeDB "
 		"--threads {threads} --report-zero-counts --confidence 0.05 --output {output} --paired {input.R1} {input.R2} 2> {log}"
 
-#Split kraken: Working!
 rule split_kraken_output:
 	input:
-		"teste/5_trimmed_reads_kraken_reports/{sample}.trimmed.kraken"
+		"MyAssembly_{genotype}/5_trimmed_reads_kraken_reports/{sample}.trimmed.kraken"
 	output:
-		expand("teste/5_trimmed_reads_kraken_reports/parts/{{sample}}.trimmed_{part}.kraken", part=parts)
+		expand("MyAssembly_{{genotype}}/5_trimmed_reads_kraken_reports/parts/{{sample}}.trimmed_{part}.kraken", part=parts)
 	params:
 		identificator = "{sample}",
+		genotype = "{genotype}",
 		server = "figsrv"
 	threads: 1
 	resources: 
 		mem_free=1
 	log:
-		"teste/logs/split_kraken_output/{sample}.log"
+		"MyAssembly_{genotype}/logs/split_kraken_output/{sample}.log"
 	shell:
-		"split --number=l/10 -d --additional-suffix=.kraken {input} teste/5_trimmed_reads_kraken_reports/parts/{params.identificator}.trimmed_ 2> {log}"
+		"split --number=l/10 -d --additional-suffix=.kraken {input} MyAssembly_{params.genotype}/5_trimmed_reads_kraken_reports/parts/{params.identificator}.trimmed_ 2> {log}"
 
-#Remove contaminants with ContFree-NGS: Waiting to test
 rule create_index_contfree_ngs:
 	input: 
-		R1 = "teste/3_trimmed_reads/{sample}.trimmed.R1.fastq",
-		R2 = "teste/3_trimmed_reads/{sample}.trimmed.R2.fastq"
+		R1 = "MyAssembly_{genotype}/3_trimmed_reads/{sample}.trimmed.R1.fastq",
+		R2 = "MyAssembly_{genotype}/3_trimmed_reads/{sample}.trimmed.R2.fastq"
 	output:
-		R1 = "teste/6_contamination_removal/index/{sample}.trimmed.R1.index",
-		R2 = "teste/6_contamination_removal/index/{sample}.trimmed.R2.index"
+		R1 = "MyAssembly_{genotype}/6_contamination_removal/index/{sample}.trimmed.R1.index",
+		R2 = "MyAssembly_{genotype}/6_contamination_removal/index/{sample}.trimmed.R2.index"
 	threads: 1
 	resources:
 		mem_free=1
 	params:
+		genotype="{genotype}",
 		server="bcmsrv"
 	log:
-		"teste/logs/create_index/{sample}.log"
+		"MyAssembly_{genotype}/logs/create_index/{sample}.log"
 	shell:
-		"{create_index} -R1 {input.R1} -R2 {input.R2} -o teste/6_contamination_removal/index/ 2> {log}"
+		"{create_index} -R1 {input.R1} -R2 {input.R2} -o MyAssembly_{params.genotype}/6_contamination_removal/index/ 2> {log}"
 
-#Run contfree_ngs: Waiting to text
 rule contfree_ngs:
 	input:
-		R1 = "teste/6_contamination_removal/index/{sample}.trimmed.R1.index",
-		R2 = "teste/6_contamination_removal/index/{sample}.trimmed.R2.index",
-		kraken_file = "teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_{part}.kraken"
+		R1 = "MyAssembly_{genotype}/6_contamination_removal/index/{sample}.trimmed.R1.index",
+		R2 = "MyAssembly_{genotype}/6_contamination_removal/index/{sample}.trimmed.R2.index",
+		kraken_file = "MyAssembly_{genotype}/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_{part}.kraken"
 	output: 
-		filtered_parts_R1 = "teste/6_contamination_removal/parts/{part}.{sample}.trimmed.filtered.R1.fastq", 
-		filtered_parts_R2 = "teste/6_contamination_removal/parts/{part}.{sample}.trimmed.filtered.R2.fastq", 
-		unclassified_parts_R1 = "teste/6_contamination_removal/parts/{part}.{sample}.trimmed.unclassified.R1.fastq",
-		unclassified_parts_R2 = "teste/6_contamination_removal/parts/{part}.{sample}.trimmed.unclassified.R2.fastq"
+		filtered_parts_R1 = "MyAssembly_{genotype}/6_contamination_removal/parts/{part}.{sample}.trimmed.filtered.R1.fastq", 
+		filtered_parts_R2 = "MyAssembly_{genotype}/6_contamination_removal/parts/{part}.{sample}.trimmed.filtered.R2.fastq", 
+		unclassified_parts_R1 = "MyAssembly_{genotype}/6_contamination_removal/parts/{part}.{sample}.trimmed.unclassified.R1.fastq",
+		unclassified_parts_R2 = "MyAssembly_{genotype}/6_contamination_removal/parts/{part}.{sample}.trimmed.unclassified.R2.fastq"
 	threads: 1
 	resources: 
 		mem_free=1
 	params:
+		genotype="{genotype}",
 		server="bcmsrv"
 	log:
-		"teste/logs/contfree_ngs/{sample}.{part}.log"
+		"MyAssembly_{genotype}/logs/contfree_ngs/{sample}.{part}.log"
 	shell:
-		"{contfree_ngs} --taxonomy {input.kraken_file} --s p --R1 {input.R1} --R2 {input.R2} --taxon Viridiplantae -o teste/6_contamination_removal/parts/ 2> {log};"
+		"{contfree_ngs} --taxonomy {input.kraken_file} --s p --R1 {input.R1} --R2 {input.R2} --taxon Viridiplantae -o MyAssembly_{params.genotype}/6_contamination_removal/parts/ 2> {log};"
 
 rule merge:
 	input:
-		filtered_parts_R1 = expand("teste/6_contamination_removal/parts/{part}.{{sample}}.trimmed.filtered.R1.fastq", part=parts),
-		filtered_parts_R2 = expand("teste/6_contamination_removal/parts/{part}.{{sample}}.trimmed.filtered.R2.fastq", part=parts),
-		unclassified_parts_R1 = expand("teste/6_contamination_removal/parts/{part}.{{sample}}.trimmed.unclassified.R1.fastq", part=parts),
-		unclassified_parts_R2 = expand("teste/6_contamination_removal/parts/{part}.{{sample}}.trimmed.unclassified.R2.fastq", part=parts)
+		filtered_parts_R1 = expand("MyAssembly_{{genotype}}/6_contamination_removal/parts/{part}.{{sample}}.trimmed.filtered.R1.fastq", part=parts),
+		filtered_parts_R2 = expand("MyAssembly_{{genotype}}/6_contamination_removal/parts/{part}.{{sample}}.trimmed.filtered.R2.fastq", part=parts),
+		unclassified_parts_R1 = expand("MyAssembly_{{genotype}}/6_contamination_removal/parts/{part}.{{sample}}.trimmed.unclassified.R1.fastq", part=parts),
+		unclassified_parts_R2 = expand("MyAssembly_{{genotype}}/6_contamination_removal/parts/{part}.{{sample}}.trimmed.unclassified.R2.fastq", part=parts)
 	output:
-		filtered_total_R1 = "teste/6_contamination_removal/{sample}.trimmed.filtered.total.R1.fastq",
-		filtered_total_R2 = "teste/6_contamination_removal/{sample}.trimmed.filtered.total.R2.fastq",
-		unclassified_total_R1 = "teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R1.fastq",
-		unclassified_total_R2 = "teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R2.fastq"
+		filtered_total_R1 = "MyAssembly_{genotype}/6_contamination_removal/{sample}.trimmed.filtered.total.R1.fastq",
+		filtered_total_R2 = "MyAssembly_{genotype}/6_contamination_removal/{sample}.trimmed.filtered.total.R2.fastq",
+		unclassified_total_R1 = "MyAssembly_{genotype}/6_contamination_removal/{sample}.trimmed.unclassified.total.R1.fastq",
+		unclassified_total_R2 = "MyAssembly_{genotype}/6_contamination_removal/{sample}.trimmed.unclassified.total.R2.fastq"
 	threads: 1
 	resources:
 		mem_free=1
 	params:
 		server="figsrv"
 	log:
-		"teste/logs/merge/{sample}.log"
+		"MyAssembly_{genotype}/logs/merge/{sample}.log"
 	shell:
 		"cat {input.filtered_parts_R1} >> {output.filtered_total_R1};"
 		"cat {input.filtered_parts_R2} >> {output.filtered_total_R2};"
 		"cat {input.unclassified_parts_R1} >> {output.unclassified_total_R1};"
 		"cat {input.unclassified_parts_R2} >> {output.unclassified_total_R2}"
 
-#Run Trinity: Waiting to test
-filtered_total_R1 = expand("teste/6_contamination_removal/{sample}.trimmed.filtered.total.R1.fastq", sample=samples)
-filtered_total_R2 = expand("teste/6_contamination_removal/{sample}.trimmed.filtered.total.R2.fastq", sample=samples)
-unclassified_total_R1 = expand("teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R1.fastq", sample=samples)
-unclassified_total_R2 = expand("teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R2.fastq", sample=samples)
+filtered_total_R1 = expand("MyAssembly_{{genotype}}/6_contamination_removal/{sample}.trimmed.filtered.total.R1.fastq", sample=samples)
+filtered_total_R2 = expand("MyAssembly_{{genotype}}/6_contamination_removal/{sample}.trimmed.filtered.total.R2.fastq", sample=samples)
+unclassified_total_R1 = expand("MyAssembly_{{genotype}}/6_contamination_removal/{sample}.trimmed.unclassified.total.R1.fastq", sample=samples)
+unclassified_total_R2 = expand("MyAssembly_{{genotype}}/6_contamination_removal/{sample}.trimmed.unclassified.total.R2.fastq", sample=samples)
 
 rule Trinity:
 	input:
-		filtered_total_R1 = expand("teste/6_contamination_removal/{sample}.trimmed.filtered.total.R1.fastq", sample=samples),
-		filtered_total_R2 = expand("teste/6_contamination_removal/{sample}.trimmed.filtered.total.R2.fastq", sample=samples),
-		unclassified_total_R1 = expand("teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R1.fastq", sample=samples),
-		unclassified_total_R2 = expand("teste/6_contamination_removal/{sample}.trimmed.unclassified.total.R2.fastq", sample=samples) 
+		filtered_total_R1 = expand("MyAssembly_{{genotype}}/6_contamination_removal/{sample}.trimmed.filtered.total.R1.fastq", sample=samples),
+		filtered_total_R2 = expand("MyAssembly_{{genotype}}/6_contamination_removal/{sample}.trimmed.filtered.total.R2.fastq", sample=samples),
+		unclassified_total_R1 = expand("MyAssembly_{{genotype}}/6_contamination_removal/{sample}.trimmed.unclassified.total.R1.fastq", sample=samples),
+		unclassified_total_R2 = expand("MyAssembly_{{genotype}}/6_contamination_removal/{sample}.trimmed.unclassified.total.R2.fastq", sample=samples) 
 	output: 
-		"7_trinity_assembly/MyAssembly_{genotype}_trinity_k25.Trinity.fasta"
+		"MyAssembly_{genotype}/7_trinity_assembly/MyAssembly_{genotype}_trinity_k25.Trinity.fasta"
 	params:
 		filtered_total_R1=','.join(filtered_total_R1),
 		filtered_total_R2=','.join(filtered_total_R2),
@@ -261,10 +233,10 @@ rule Trinity:
 		genotype=GENOTYPE
 	resources: 
 		mem_free=20
-        threads: 10
+	threads: 10
 	log:
-		k25 = "teste/logs/trinity/{genotype}.k25.log",
-		k31 = "teste/logs/trinity/{genotype}.k31.log"
+		k25 = "MyAssembly_{genotype}/logs/trinity/{genotype}.k25.log",
+		k31 = "MyAssembly_{genotype}/logs/trinity/{genotype}.k31.log"
 	shell:
 		"/usr/bin/time -v {trinity} --seqType fq --left {params.filtered_total_R1},{params.unclassified_total_R1} --right {params.filtered_total_R2},{params.unclassified_total_R2} --SS_lib_type RF --max_memory 100G --min_contig_length 200 --CPU {threads} --output 7_trinity_assembly/MyAssembly_{params.genotype}_trinity_k25 --full_cleanup --no_normalize_reads --KMER_SIZE 25 2> {log.k25};"
 		"/usr/bin/time -v {trinity} --seqType fq --left {params.filtered_total_R1},{params.unclassified_total_R1} --right {params.filtered_total_R2},{params.unclassified_total_R2} --SS_lib_type RF --max_memory 100G --min_contig_length 200 --CPU {threads} --output 7_trinity_assembly/MyAssembly_{params.genotype}_trinity_k25 --full_cleanup --no_normalize_reads --KMER_SIZE 25 2> {log.k31}"
