@@ -1,0 +1,7 @@
+software:
+        fastq-dump: /Storage/progs/sratoolkit.2.9.6-centos_linux64/bin/fastq-dump
+        fastqc: /Storage/progs/FastQC/fastqc
+        bbduk: /Storage/progs/bbmap_35.85/bbduk2.sh
+        kraken2: /Storage/progs/miniconda2/bin/kraken2
+        create_index: /Storage/data1/felipe.peres/Sugarcane/snakemake/teste/create_fastq_indexdb.py
+        contfree_ngs: /Storage/data1/felipe.peres/Sugarcane/snakemake/teste/ContFree-NGS.py

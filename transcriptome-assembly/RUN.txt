@@ -1,0 +1,12 @@
+snakemake -p --cluster "qsub -q all.q -V -cwd -pe smp 1" --jobs 10
+snakemake -np --cluster "qsub -q all.q -V -cwd -pe smp {threads}" --jobs 10
+snakemake -p --cluster "qsub -q all.q -V -cwd -pe smp {threads}" --jobs 10
+snakemake -np --resources mem_mb=240000 --cluster "qsub -q all.q -V -cwd -l h=figsrv -pe smp {threads}" --jobs 10
+
+snakemake -np --cluster "qsub -q all.q -V -cwd -pe smp {threads} -o logs_teste/{rule}_{wildcards} -e logs_teste/{rule}_{wildcards}" --jobs 10
+
+snakemake -p --resources mem_mb=260000 --cluster "qsub -q all.q -V -cwd -l h=figsrv -pe smp {threads} -l mem_free={resources.mem_free}G" --jobs 10
+
+Acho que nao precisa de --resources:
+rodando no screen 
+snakemake -np --cluster "qsub -q all.q -V -cwd -l h=figsrv -pe smp {threads} -l mem_free={resources.mem_free}G" --jobs 10

@@ -1,0 +1,165 @@
+#!/usr/bin/env python
+
+configfile: "config.yaml"
+
+import pandas as pd
+samples = pd.read_csv("samples_teste.csv")
+parts = pd.read_csv("parts_teste.csv")
+
+#Software executable
+fastq_dump = config["software"]["fastq-dump"]
+fastqc = config["software"]["fastqc"]
+bbduk = config["software"]["bbduk"]
+kraken2 = config["software"]["kraken2"]
+create_index = config["software"]["create_index"]
+contfree_ngs = config["software"]["contfree_ngs"]
+
+rule all:
+	input:
+		#Generate index files
+		expand("teste/6_contamination_removal/index/{sample}.trimmed.R1.index", sample=samples),
+		expand("teste/6_contamination_removal/index/{sample}.trimmed.R2.index", sample=samples)
+
+rule download_fastq:
+	output:
+		R1 = "teste/1_raw_reads_in_fastq_format/{sample}_1.fastq",
+		R2 = "teste/1_raw_reads_in_fastq_format/{sample}_2.fastq"
+	threads: 1
+	resources: mem_free=1
+	log:
+		"teste/logs/download_fastq/{sample}.log"
+	shell:
+		"{fastq_dump} --defline-seq '@$sn[_$rn]/$ri' --split-files {wildcards.sample} -O teste/1_raw_reads_in_fastq_format 2> {log}"
+
+rule fastqc:
+	input:
+                R1 = "teste/1_raw_reads_in_fastq_format/{sample}_1.fastq",
+                R2 = "teste/1_raw_reads_in_fastq_format/{sample}_2.fastq" 
+	output:
+		html_1= "teste/2_raw_reads_fastqc_reports/{sample}_1_fastqc.html",
+		zip_1 = "teste/2_raw_reads_fastqc_reports/{sample}_1_fastqc.zip",
+                html_2= "teste/2_raw_reads_fastqc_reports/{sample}_2_fastqc.html",
+                zip_2 = "teste/2_raw_reads_fastqc_reports/{sample}_2_fastqc.zip"
+	threads: 1
+	resources: mem_free=1
+	log:
+		"teste/logs/fastqc/{sample}.log"
+	shell:
+		"{fastqc} -f fastq {input.R1} -o teste/2_raw_reads_fastqc_reports 2> {log};"
+		"{fastqc} -f fastq {input.R2} -o teste/2_raw_reads_fastqc_reports 2> {log}"
+
+rule bbduk:
+	input:
+		R1 = "teste/1_raw_reads_in_fastq_format/{sample}_1.fastq",
+		R2 = "teste/1_raw_reads_in_fastq_format/{sample}_2.fastq"
+	output:
+		R1 = "teste/3_trimmed_reads/{sample}.trimmed.R1.fastq",
+		R2 = "teste/3_trimmed_reads/{sample}.trimmed.R2.fastq",
+		refstats = "teste/3_trimmed_reads/{sample}.trimmed.refstats",
+		stats = "teste/3_trimmed_reads/{sample}.trimmed.stats"
+	log:
+		"teste/logs/bbduk/{sample}.log"
+	threads: 4
+	resources: mem_free=1
+	shell:
+		"{bbduk} -Xmx40g threads={threads} in1={input.R1} in2={input.R2} "
+		"refstats={output.refstats} stats={output.stats} "
+		"out1={output.R1} out2={output.R2} "
+		"rref=/Storage/progs/bbmap_35.85/resources/adapters.fa "
+		"fref=/Storage/progs/sortmerna-2.1b/rRNA_databases/rfam-5.8s-database-id98.fasta,"
+		"/Storage/progs/sortmerna-2.1b/rRNA_databases/silva-bac-16s-id90.fasta,"
+		"/Storage/progs/sortmerna-2.1b/rRNA_databases/rfam-5s-database-id98.fasta,"
+		"/Storage/progs/sortmerna-2.1b/rRNA_databases/silva-bac-23s-id98.fasta,"
+		"/Storage/progs/sortmerna-2.1b/rRNA_databases/silva-arc-16s-id95.fasta,"
+		"/Storage/progs/sortmerna-2.1b/rRNA_databases/silva-euk-18s-id95.fasta,"
+		"/Storage/progs/sortmerna-2.1b/rRNA_databases/silva-arc-23s-id98.fasta,"
+		"/Storage/progs/sortmerna-2.1b/rRNA_databases/silva-euk-28s-id98.fasta "
+		"minlength=75 qtrim=w trimq=20 tpe tbo 2> {log}"
+
+rule fastqc_after_bbduk:
+	input:
+		R1 = "teste/3_trimmed_reads/{sample}.trimmed.R1.fastq",
+		R2 = "teste/3_trimmed_reads/{sample}.trimmed.R2.fastq"
+	output:
+		html_1= "teste/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R1_fastqc.html",
+		zip_1 = "teste/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R1_fastqc.zip",
+		html_2= "teste/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R2_fastqc.html",
+		zip_2 = "teste/4_trimmed_reads_fastqc_reports/{sample}.trimmed.R2_fastqc.zip"
+	threads: 1
+	resources: mem_free=1
+	log:
+		"teste/logs/fastqc_after_bbduk/{sample}.log"
+	shell:
+		"{fastqc} -f fastq {input.R1} -o teste/4_trimmed_reads_fastqc_reports 2> {log};"
+		"{fastqc} -f fastq {input.R2} -o teste/4_trimmed_reads_fastqc_reports 2> {log}"
+
+rule kraken:
+	input:
+		R1 = "teste/3_trimmed_reads/{sample}.trimmed.R1.fastq",
+		R2 = "teste/3_trimmed_reads/{sample}.trimmed.R2.fastq"
+	output:
+		"teste/5_trimmed_reads_kraken_reports/{sample}.trimmed.kraken"
+	threads: 10
+	resources:
+		mem_free=250
+	log:
+		"teste/logs/kraken2/{sample}.log"
+	shell:
+		"{kraken2} --db /Storage/data1/felipe.peres/kraken2/completeDB "
+		"--threads {threads} --report-zero-counts --confidence 0.05 --output {output} --paired {input.R1} {input.R2} 2> {log}"
+
+rule split_kraken_output:
+	input:
+		"teste/5_trimmed_reads_kraken_reports/{sample}.trimmed.kraken"
+	output:
+		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_00.kraken",
+		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_01.kraken",
+		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_02.kraken",
+		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_03.kraken",
+		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_04.kraken",
+		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_05.kraken",
+		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_06.kraken",
+		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_07.kraken",
+		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_08.kraken",
+		"teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_09.kraken"
+	params:
+		identificator = "{sample}"
+	threads: 1
+	resources: mem_free=1
+	log:
+		"teste/logs/split_kraken_output/{sample}.log"
+	shell:
+		"split -n 10 -d --additional-suffix=.kraken {input} teste/5_trimmed_reads_kraken_reports/parts/{params.identificator}.trimmed_ 2> {log}"
+
+rule create_index_contfree_ngs:
+	input: 
+		R1 = "teste/3_trimmed_reads/{sample}.trimmed.R1.fastq",
+		R2 = "teste/3_trimmed_reads/{sample}.trimmed.R2.fastq"
+	output:
+		R1 = "teste/6_contamination_removal/index/{sample}.trimmed.R1.index",
+		R2 = "teste/6_contamination_removal/index/{sample}.trimmed.R2.index"
+	threads: 1
+	resources:
+		mem_free=1
+	log:
+		"teste/logs/create_index/{sample}.log"
+	shell:
+		"{create_index} -R1 {input.R1} -R2 {input.R2} -o teste/6_contamination_removal/index/ 2> {log}"
+
+rule contfree_ngs:
+	input:
+		R1 = "teste/6_contamination_removal/index/{sample}.trimmed.R1.index",
+		R2 = "teste/6_contamination_removal/index/{sample}.trimmed.R2.index",
+		kraken_file = "teste/5_trimmed_reads_kraken_reports/parts/{sample}.trimmed_{part}.kraken"
+	output: 
+		filtered_parts_R1 = "teste/6_contamination_removal/parts/{part}.{sample}.trimmed.filtered.R1.fastq", 
+		filtered_parts_R2 = "teste/6_contamination_removal/parts/{part}.{sample}.trimmed.filtered.R2.fastq", 
+		unclassified_parts_R1 = "teste/6_contamination_removal/parts/{part}.{sample}.trimmed.unclassified.R1.fastq",
+		unclassified_parts_R2 = "teste/6_contamination_removal/parts/{part}.{sample}.trimmed.unclassified.R2.fastq"
+	threads: 1
+	resources: mem_free=1
+#	log:
+#		"teste/logs/contfree_ngs/{sample}.{part}.log"
+	shell:
+		"{contfree_ngs} --taxonomy {input.kraken_file} --s p --R1 {input.R1} --R2 {input.R2} --taxon Viridiplantae -o teste/6_contamination_removal/parts/ 2> {log};"
+
