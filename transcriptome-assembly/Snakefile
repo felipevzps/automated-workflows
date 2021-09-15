@@ -17,10 +17,17 @@ kraken2 = config["software"]["kraken2"]
 create_index = config["software"]["create_index"]
 contfree_ngs = config["software"]["contfree_ngs"]
 trinity = config["software"]["trinity"]
+cd_hit_est = config["software"]["cd_hit_est"]
+extract_contigs = config["software"]["extract_contigs"]
+busco = config["software"]["busco"]
+transrate = config["software"]["transrate"]
+salmon = config["software"]["salmon"]
 
 rule all:
 	input:
-		expand("MyAssembly_{genotype}/7_trinity_assembly/MyAssembly_{genotype}_trinity_k25.Trinity.fasta", genotype=GENOTYPE)	
+		expand("MyAssembly_{genotype}/8_busco/MyAssembly_{genotype}_k25andk31_busco", genotype=GENOTYPE),
+		expand("MyAssembly_{genotype}/9_transrate/transrate_comparative_Shorgum_vs_{genotype}", genotype=GENOTYPE),
+		expand("MyAssembly_{genotype}/10_salmon/quant/", genotype=GENOTYPE)
 
 rule download_fastq:
 	output:
@@ -120,9 +127,7 @@ rule kraken:
 		"MyAssembly_{genotype}/5_trimmed_reads_kraken_reports/{sample}.trimmed.kraken"
 	threads: 10
 	resources:
-		mem_free=180,
-		#def mem as consumable
-		#h_vmem=180
+		mem_free=255
 	params:
 		server="figsrv"
 	log:
@@ -223,14 +228,15 @@ rule Trinity:
 		unclassified_total_R1 = expand("MyAssembly_{{genotype}}/6_contamination_removal/{sample}.trimmed.unclassified.total.R1.fastq", sample=samples),
 		unclassified_total_R2 = expand("MyAssembly_{{genotype}}/6_contamination_removal/{sample}.trimmed.unclassified.total.R2.fastq", sample=samples) 
 	output: 
-		"MyAssembly_{genotype}/7_trinity_assembly/MyAssembly_{genotype}_trinity_k25.Trinity.fasta"
+		k25 = "MyAssembly_{genotype}/7_trinity_assembly/MyAssembly_{genotype}_trinity_k25.Trinity.fasta",
+		k31 = "MyAssembly_{genotype}/7_trinity_assembly/MyAssembly_{genotype}_trinity_k31.Trinity.fasta"
 	params:
 		filtered_total_R1=','.join(filtered_total_R1),
 		filtered_total_R2=','.join(filtered_total_R2),
 		unclassified_total_R1=','.join(unclassified_total_R1),
 		unclassified_total_R2=','.join(unclassified_total_R2),
 		server="figsrv",
-		genotype=GENOTYPE
+		genotype="{genotype}"
 	resources: 
 		mem_free=20
 	threads: 10
@@ -240,3 +246,92 @@ rule Trinity:
 	shell:
 		"/usr/bin/time -v {trinity} --seqType fq --left {params.filtered_total_R1},{params.unclassified_total_R1} --right {params.filtered_total_R2},{params.unclassified_total_R2} --SS_lib_type RF --max_memory 100G --min_contig_length 200 --CPU {threads} --output 7_trinity_assembly/MyAssembly_{params.genotype}_trinity_k25 --full_cleanup --no_normalize_reads --KMER_SIZE 25 2> {log.k25};"
 		"/usr/bin/time -v {trinity} --seqType fq --left {params.filtered_total_R1},{params.unclassified_total_R1} --right {params.filtered_total_R2},{params.unclassified_total_R2} --SS_lib_type RF --max_memory 100G --min_contig_length 200 --CPU {threads} --output 7_trinity_assembly/MyAssembly_{params.genotype}_trinity_k25 --full_cleanup --no_normalize_reads --KMER_SIZE 25 2> {log.k31}"
+
+rule cd_hit_est:
+	input: 
+		k25 = "MyAssembly_{genotype}/7_trinity_assembly/MyAssembly_{genotype}_trinity_k25.Trinity.fasta",
+		k31 = "MyAssembly_{genotype}/7_trinity_assembly/MyAssembly_{genotype}_trinity_k31.Trinity.fasta"
+	output:
+		mod_k25 = "MyAssembly_{genotype}/7_trinity_assembly/MyAssembly_{genotype}_trinity_k25.Trinity.mod.fasta",
+		mod_k31 = "MyAssembly_{genotype}/7_trinity_assembly/MyAssembly_{genotype}_trinity_k31.Trinity.mod.fasta",
+		merged_mod = "MyAssembly_{genotype}/7_trinity_assembly/MyAssembly_{genotype}_trinity_k25_and_k31.Trinity.merged.mod.fasta",
+		final_cd_hit_est = "MyAssembly_{genotype}/7_trinity_assembly/MyAssembly_{genotype}_trinity_k25_and_k31.Trinity.merged.final.fasta"
+	params:
+		genotype="{genotype}",
+		server="figsrv"
+	threads: 1
+	log:
+		"MyAssembly_{genotype}/logs/cd_hit_est_transcriptomes/{genotype}.log"
+	shell:
+		"sed 's/>/>k25_{params.genotype}_/' {input.k25} > {output.mod_k25};"
+		"sed 's/>/>k31_{params.genotype}_/' {input.k31} > {output.mod_k31};"
+		"cat {output.mod_k25} {output.mod_k31} > {output.merged_mod};"
+		"/usr/bin/time -v {cd_hit_est} -i {output.merged_mod} -o {output.final_cd_hit_est} -c 1 -n 11 -T {threads} -M 0 -d 0 -r 0 -g 1"
+
+rule extract_contiglenght_301:
+	input:
+		transcriptome = "MyAssembly_{genotype}/7_trinity_assembly/MyAssembly_{genotype}_trinity_k25_and_k31.Trinity.merged.final.fasta"
+	output: 
+		"MyAssembly_{genotype}_trinity_k25_and_k31.Trinity.merged.final_gt301bp.fasta"
+	params:
+		server="figsrv"
+	threads: 1
+	log: 
+		"MyAssembly_{genotype}/logs/extract_contigs/{genotype}.log"
+	shell:
+		"{extract_contigs} -f {input.transcriptome} -m 301 2> {log}"
+rule busco:
+	input:
+		transcriptome="MyAssembly_{genotype}_trinity_k25_and_k31.Trinity.merged.final_gt301bp.fasta"
+	output:
+		busco="MyAssembly_{genotype}/8_busco/MyAssembly_{genotype}_k25andk31_busco"
+	params:
+		server="figsrv"
+	threads: 2
+	log:
+		"MyAssembly_{genotype}/logs/busco/{genotype}.log"
+	shell:
+		"/usr/bin/time -v {busco} -i {input.transcriptome} -o {output.busco} -c {threads} -m transcriptome -l /Storage/databases/BUSCO_DBs/embryophyta_odb9/"		
+
+rule transrate:
+	input:
+		transcriptome="MyAssembly_{genotype}_trinity_k25_and_k31.Trinity.merged.final_gt301bp.fasta"
+	output:
+		transrate="MyAssembly_{genotype}/9_transrate/transrate_comparative_Shorgum_vs_{genotype}"
+	params:
+		server="figsrv",
+		ref="Sbicolor_454_v3.1.1.transcript.fa"
+	threads: 2
+	log:
+		"MyAssembly_{genotype}/logs/transrate/{genotype}.log"
+	shell:
+		"/usr/bin/time -v {transrate} --assembly {input.transcriptome} --reference {params.ref} --threads {threads} --output {output.transrate}"
+rule salmon_index:
+	input:
+		transcriptome="MyAssembly_{genotype}_trinity_k25_and_k31.Trinity.merged.final_gt301bp.fasta"
+	output:
+		salmon_index="MyAssembly_{genotype}/10_salmon/index/"
+	params:
+		server="figsrv"
+	threads: 2
+	log:
+		"MyAssembly_{genotype}/logs/salmon_index/{genotype}.log"
+	shell:
+		"/usr/bin/time -v {salmon} index -t {input.transcriptome} -p {threads} -i {output.salmon_index} --gencode"
+
+rule salmon_quant:
+	input:
+		salmon_index="MyAssembly_{genotype}/10_salmon/index/",
+		filtered_R1 = expand("MyAssembly_{{genotype}}/6_contamination_removal/{sample}.trimmed.filtered.total.R1.fastq", sample=samples),
+                filtered_R2 = expand("MyAssembly_{{genotype}}/6_contamination_removal/{sample}.trimmed.filtered.total.R2.fastq", sample=samples),
+                unclassified_R1 = expand("MyAssembly_{{genotype}}/6_contamination_removal/{sample}.trimmed.unclassified.total.R1.fastq", sample=samples),
+                unclassified_R2 = expand("MyAssembly_{{genotype}}/6_contamination_removal/{sample}.trimmed.unclassified.total.R2.fastq", sample=samples)
+	output:
+		salmon_quant="MyAssembly_{genotype}/10_salmon/quant/"
+	params:
+		server="figsrv"
+	threads: 2
+	log: 
+		"MyAssembly_{genotype}/logs/salmon_quant/{genotype}.log"
+	shell:
+		"/usr/bin/time -v {salmon} quant -i {input.salmon_index} -l A -1 {input.filtered_R1} {input.unclassified_R1} -2 {input.filtered_R2} {input.unclassified_R2} --validateMappings -o {output.salmon_quant}"
